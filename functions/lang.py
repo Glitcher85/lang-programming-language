@@ -1,3 +1,4 @@
+"""
 ################################################
 #CONSTANTS
 ################################################
@@ -9,16 +10,49 @@ DIGITS = "0123456789"
 ################################################
 
 class Error:
-	def __init__(self, error_name, details):
+	def __init__(self, position_start, position_end, error_name, details):
 		self.details = details
 		self.error_name = error_name
+		self.position_end = position_end
+		self.position_start = position_start
 
 	def as_string(self): 
-		return f"{self.error_name}: {self.details}"
+		return f"File {self.position_start.filename}, line {self.position_start.line}:\n{self.error_name}: {self.details}"
 
 class InvalidCharacterError(Error):
-	def __init__(self, details):
-		super().__init__("Invalid Character", details)
+	def __init__(self, position_start, position_end, details):
+		super().__init__(position_start, position_end, "Invalid Character", details)
+
+################################################
+#POSITION
+################################################
+
+class Position:
+	def __init__(
+		self, index, 
+		line, column, 
+		filename, filetext
+	):
+		self.line = line
+		self.index = index
+		self.column = column
+		self.filename = filename
+		self.filetext = filetext
+
+	def advance(self, current_character):
+		self.index += 1
+		self.column += 1
+		if current_character == "\n": self.line += 1; self.column = 0
+		return self
+
+	def copy(self): 
+		return Position(
+			self.index, 
+			self.line, 
+			self.column, 
+			self.filename, 
+			self.filetext	
+		)
 
 ################################################
 #TOKENS
@@ -47,15 +81,16 @@ class Token:
 ################################################
 
 class Lexer:
-	def __init__(self, text):
+	def __init__(self, filename, text):
 		self.text = text
-		self.position = -1
+		self.filename = filename
 		self.current_character = None
+		self.position = Position(-1, 1, -1, filename, text)
 		self.advance()
 		
 	def advance(self):
-		self.position += 1
-		self.current_character = self.text[self.position] if self.position < len(self.text) else None
+		self.position.advance(self.current_character)
+		self.current_character = self.text[self.position.index] if self.position.index < len(self.text) else None
 
 	def get_tokens(self):
 		tokens = []
@@ -68,7 +103,9 @@ class Lexer:
 			elif self.current_character == "/": tokens.append(Token(TT_DIVIDE)); self.advance()
 			elif self.current_character == "(": tokens.append(Token(TT_L_PARENTHESIS)); self.advance()
 			elif self.current_character == ")": tokens.append(Token(TT_R_PARENTHESIS)); self.advance()
-			else: self.advance(); return [], InvalidCharacterError('"' + self.current_character + '"')
+			else: 
+				self.position_start = self.position.copy()
+				return [], InvalidCharacterError(self.position_start, self.position, '"' + self.current_character + '"')
 		return tokens, None
 
 	def return_number_type(self):
@@ -87,8 +124,10 @@ class Lexer:
 ################################################
 #RUN
 ################################################
+"""
+from lexer import Lexer
 
-def run(text):
-	lexer = Lexer(text)
+def run(filename, text):
+	lexer = Lexer(filename, text)
 	tokens, error = lexer.get_tokens()
 	return tokens, error
